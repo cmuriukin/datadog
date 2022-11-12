@@ -1,0 +1,28 @@
+version: '3.7'
+services:
+  frontend:
+    build:
+      context: ./services/frontend
+    command: yarn dev
+    volumes:
+      - "./services/frontend/site:/storedog-app/site"
+    ports:
+      - 3000:3000
+    networks:
+      - storedog-backend_storedog-net
+  nginx:
+    build:
+      context: ./services/nginx
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "nginx", "service": "nginx"}]'
+    networks:
+      - storedog-backend_storedog-net
+
+networks:
+  storedog-backend_storedog-net:
+    external: true

@@ -1,0 +1,134 @@
+version: '3'
+services:
+  datadog:
+    image: "datadog/agent:7.31.1"
+    environment:
+      - DD_API_KEY
+      - DD_APM_ENABLED=true
+      - DD_LOGS_ENABLED=true
+      - DD_PROCESS_AGENT_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_ENV=synthetics-intro
+      - DD_SYSTEM_PROBE_ENABLED=true
+    ports:
+      - "8126:8126"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /sys/kernel/debug:/sys/kernel/debug
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+      - IPC_LOCK
+    security_opt:
+      - apparmor:unconfined
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "agent", "service": "agent"}]'
+  discounts:
+    environment:
+      - FLASK_APP=discounts.py
+      - FLASK_DEBUG=1
+      - POSTGRES_PASSWORD
+      - POSTGRES_USER
+      - POSTGRES_HOST=db
+      - DD_AGENT_HOST=datadog
+      - DD_LOGS_INJECTION=true
+      - DD_TRACE_ANALYTICS_ENABLED=true
+      - DD_SERVICE=discounts-service
+      - DD_VERSION=2.1.2
+      - DD_ENV=synthetics-intro
+    image: 'ddtraining/discounts:2.1.2'
+    command:
+      [
+        sh,
+        -c,
+        "pip install ddtrace -U && ddtrace-run flask run --port=5001 --host=0.0.0.0"
+      ]
+    ports:
+      - "5001:5001"
+    volumes:
+      - /root/lab/discounts.py:/app/discounts.py
+    depends_on:
+      - datadog
+      - db
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "python", "service": "discounts-service"}]'
+      com.datadoghq.tags.service: 'discounts-service'
+      com.datadoghq.tags.env: 'synthetics-intro'
+  frontend:
+    environment:
+      - DD_AGENT_HOST=datadog
+      - DD_LOGS_INJECTION=true
+      - DD_TRACE_ANALYTICS_ENABLED=true
+      - DB_USERNAME
+      - DB_PASSWORD
+      - DD_CLIENT_TOKEN
+      - DD_APPLICATION_ID
+      - DD_SERVICE=store-frontend
+      - DD_VERSION=2.1.2
+      - DD_ENV=synthetics-intro
+    image: 'ddtraining/storefront-fixed:2.1.2'
+    command: sh docker-entrypoint.sh
+    ports:
+      - "3000:3000"
+    depends_on:
+      - datadog
+      - db
+      - discounts
+      - advertisements
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "ruby", "service": "store-frontend"}]'
+      com.datadoghq.tags.service: 'store-frontend'
+      com.datadoghq.tags.env: 'synthetics-intro'
+  advertisements:
+    environment:
+      - FLASK_APP=ads.py
+      - FLASK_DEBUG=1
+      - POSTGRES_PASSWORD
+      - POSTGRES_USER
+      - POSTGRES_HOST=db
+      - DD_AGENT_HOST=datadog
+      - DD_LOGS_INJECTION=true
+      - DD_TRACE_ANALYTICS_ENABLED=true
+      - DD_SERVICE=advertisements-service
+      - DD_VERSION=2.1.2
+      - DD_ENV=synthetics-intro
+    image: 'ddtraining/advertisements-fixed:2.1.2'
+    command:
+      [
+        sh,
+        -c,
+        'pip install ddtrace -U && ddtrace-run flask run --port=5002 --host=0.0.0.0'
+      ]
+    ports:
+      - '5002:5002'
+    depends_on:
+      - datadog
+      - db
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "python", "service": "advertisements-service"}]'
+      com.datadoghq.tags.service: 'advertisements-service'
+      com.datadoghq.tags.env: 'synthetics-intro'
+  db:
+    image: postgres:11-alpine
+    restart: always
+    environment:
+      - POSTGRES_PASSWORD
+      - POSTGRES_USER
+    ports:
+      - '5432:5432'
+    labels:
+      com.datadoghq.tags.env: 'synthetics-intro'
+      com.datadoghq.tags.service: 'database'
+      com.datadoghq.tags.version: '11.12'
+      my.custom.label.team: 'database'
+      com.datadoghq.ad.check_names: '["postgres"]'
+      com.datadoghq.ad.init_configs: '[{}]'
+      com.datadoghq.ad.instances: '[{"host":"%%host%%", "port":5432,"username":"datadog","password":"datadog"}]'
+      com.datadoghq.ad.logs: '[{"source": "postgresql", "service": "database"}]'
+    volumes:
+      - /root/postgres:/var/lib/postgresql/data
+      - /root/dd_agent.sql:/docker-entrypoint-initdb.d/dd_agent.sql
