@@ -3,7 +3,7 @@ services:
   datadog:
     image: 'datadog/agent:7.31.1'
     environment:
-      - DD_API_KEY
+      - DD_API_KEY=7b83d7b9bc04430c39c34a121c1fa07a
       - DD_HOSTNAME=dd101-sre-host
       - DD_LOGS_ENABLED=true
       - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
